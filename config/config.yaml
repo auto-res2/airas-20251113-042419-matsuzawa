@@ -15,3 +15,7 @@ optuna:
   direction: maximize
   metric_name: dev_accuracy_auc
   search_space: {}  # populated per-run
+
+training:
+  epochs: 3
+  max_steps: 20000
