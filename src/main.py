@@ -3,11 +3,11 @@ import sys
 from pathlib import Path
 
 import hydra
-from hydra.utils import to_absolute_path
+from hydra.utils import to_absolute_path, get_original_cwd
 
 @hydra.main(config_path="../config", config_name="config")
 def main(cfg):
-    run_cfg = Path(to_absolute_path(f"config/runs/{cfg.run}.yaml"))
+    run_cfg = Path(get_original_cwd()) / "config" / "runs" / f"{cfg.run}.yaml"
     if not run_cfg.exists():
         raise FileNotFoundError(str(run_cfg))
 

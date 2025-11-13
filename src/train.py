@@ -11,7 +11,7 @@ import hydra
 import numpy as np
 import optuna
 import torch
-from hydra.utils import to_absolute_path
+from hydra.utils import to_absolute_path, get_original_cwd
 from omegaconf import OmegaConf
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
@@ -317,7 +317,7 @@ def _run_optuna(cfg):
 
 @hydra.main(config_path="../config", config_name="config")
 def main(cfg):
-    run_yaml = Path(to_absolute_path(f"config/runs/{cfg.run}.yaml"))
+    run_yaml = Path(get_original_cwd()) / "config" / "runs" / f"{cfg.run}.yaml"
     if not run_yaml.exists():
         raise FileNotFoundError(str(run_yaml))
     cfg = OmegaConf.merge(cfg, OmegaConf.load(run_yaml))
