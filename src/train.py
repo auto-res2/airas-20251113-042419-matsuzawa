@@ -1,6 +1,7 @@
 import logging
 import math
 import os
+import sys
 import time
 from copy import deepcopy
 from pathlib import Path
@@ -17,6 +18,9 @@ from torch.utils.data import DataLoader
 from transformers import get_cosine_schedule_with_warmup
 
 import wandb  # mandatory logging backend
+
+# Add parent directory to path to enable absolute imports
+sys.path.insert(0, str(Path(__file__).parent.parent.resolve()))
 
 # Local modules
 from src.model import build_model, collect_lora_parameters
