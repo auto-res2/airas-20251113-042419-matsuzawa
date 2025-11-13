@@ -29,6 +29,21 @@ from src.preprocess import build_dataloaders
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s:%(name)s: %(message)s")
 logger = logging.getLogger("train")
 
+# Register Optuna resolver for OmegaConf to handle ${optuna:param_name} interpolations
+# This resolver provides default values that will be overridden during Optuna sweep
+def _optuna_resolver(param_name: str) -> float:
+    """Default values for optuna hyperparameters before sweep."""
+    defaults = {
+        "lora_rank": 16,
+        "batch_size": 32,
+        "base_learning_rate": 1e-4,
+        "basicalr.R_star": 0.3,
+        "basicalr.update_interval": 32,
+    }
+    return defaults.get(param_name, 0.0)
+
+OmegaConf.register_new_resolver("optuna", _optuna_resolver, replace=True)
+
 ###############################################################################
 # BaSiCALR (proposed) & HiNoALR (baseline) helpers
 ###############################################################################
