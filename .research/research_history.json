@@ -786,6 +786,11 @@
       "expected_result": "BaSiCALR matches grid-search within ±0.03 pp across all tasks, beats HiNoALR by +0.4 pp (GSM8K) / +0.9 pp (WikiSQL), and *raises* under-trained adapters’ norms by 25 %.  About 35 % of adapters receive an LR increase, 28 % a decrease.  Overhead <0.8 % time, memory +0.01 %.",
       "expected_conclusion": "A tiny Beta-posterior on gradient-sign agreement delivers a fully *bidirectional* and *continual* LR tuner for each LoRA tensor at essentially zero cost.  BaSiCALR removes the last manual hyper-parameter in QLoRA fine-tuning scripts, improves both stability and data-efficiency, and provides a statistically grounded link between sign-based optimisers and noise-scale theory – a contribution of interest to optimisation research and to practitioners seeking one-click on-device training."
     },
-    "iterations": []
+    "iterations": [
+      {
+        "iteration_id": 1,
+        "method": "Bayesian Sign-Consistency Adaptive Learning-Rate (BaSiCALR)\n1.  Per-adapter state (2 × uint16):\n    • c⁺  – number of steps since last reset with    sign(g) = sign(EMA(g))\n    • c⁻  – number of steps with opposite sign.\n2.  Online Beta-posterior:  p̂ₜ = (α₀ + c⁺)/(α₀+β₀+c⁺+c⁻) with (α₀,β₀)=(1,1).\n3.  Reliability score:   Rₜ = 2·|p̂ₜ−0.5|  ∈[0,1].  R→1 means “sign is almost always the same”, R→0 means “coin-flip”.\n4.  LR scaling law (bidirectional):   ρₜ = exp( κ · (Rₜ−R★) ), with κ=ln2 and R★=0.3.\n   • if Rₜ>R★ ⇒ ρₜ>1 ⇒ LR grows up to ×2.\n   • if Rₜ<R★ ⇒ ρₜ<1 ⇒ LR shrinks down to ×½.\n5.  Gated update every Δ=32 optimiser steps: η_i ← clip( η_i·ρₜ , η_min , η_max ).  No extra forward/backward passes.\n6.  Reset counters whenever |ρₜ−1|<0.05 to avoid bias accumulation.\nPyTorch patch (<50 lines):\n```\nfor p in model.parameters():\n    if getattr(p,'is_lora',False):\n        p.c_pos = torch.zeros((),dtype=torch.int16)\n        p.c_neg = torch.zeros((),dtype=torch.int16)\n        p.lr = base_lr\n\nfor step,(loss) in enumerate(trainer):\n    loss.backward(); optimizer.step(); optimizer.zero_grad()\n    for p in lora_params:\n        same = torch.sign(p.grad).mean()*torch.sign( opt.state[p]['exp_avg'].mean() )>=0\n        if   same: p.c_pos+=1\n        else:       p.c_neg+=1\n        if step%32==0:\n            p_hat=(1+p.c_pos)/(2+p.c_pos+p.c_neg); R=2*abs(p_hat-0.5)\n            rho = math.exp(math.log(2)*(R-0.3))\n            p.lr = max(min(p.lr*rho,2*base_lr),0.5*base_lr)\n            p.c_pos.zero_(); p.c_neg.zero_()\n```"
+      }
+    ]
   }
 }
