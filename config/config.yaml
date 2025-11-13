@@ -1,0 +1,17 @@
+defaults:
+  - _self_
+
+run: ""  # to be provided via CLI override (e.g., run=proposed-iter1-Qwen3-0.6B-gsm8k)
+results_dir: outputs
+mode: full  # full | trial
+
+wandb:
+  entity: gengaru617-personal
+  project: 2025-11-13
+  mode: online  # switched to disabled automatically in trial mode
+
+optuna:
+  n_trials: 0
+  direction: maximize
+  metric_name: dev_accuracy_auc
+  search_space: {}  # populated per-run

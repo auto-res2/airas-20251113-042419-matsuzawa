@@ -1,0 +1,72 @@
+run_id: proposed-iter1-Qwen3-0.6B-gsm8k
+method: BaSiCALR
+model:
+  name: Qwen3-0.6B
+  architecture: transformer-decoder
+  quantisation:
+    scheme: int4
+    loader: bitsandbytes
+  lora:
+    enabled: true
+    rank: ${optuna:lora_rank}
+    alpha: 32
+    dropout: 0.05
+  init_checkpoint: hf://Qwen/Qwen3-0.6B
+dataset:
+  name: openai/gsm8k
+  config: main
+  max_length: 512
+  preprocessing:
+    shuffle_buffer: 10000
+    add_bos_token: true
+training:
+  epochs: 3
+  max_steps: 20000
+  batch_size: ${optuna:batch_size}
+  gradient_accumulation_steps: 1
+  base_learning_rate: ${optuna:base_learning_rate}
+  lr_scheduler: cosine
+  warmup_steps: 500
+  weight_decay: 0.01
+  optimizer: adamw
+  beta1: 0.9
+  beta2: 0.98
+  eps: 1.0e-8
+  mixed_precision: fp16
+  eval_interval_steps: 1000
+  save_interval_steps: 1000
+basicalr:
+  enabled: true
+  R_star: ${optuna:basicalr.R_star}
+  kappa: 0.69314718056   # ln(2)
+  update_interval: ${optuna:basicalr.update_interval}
+  lr_clip_min_factor: 0.5
+  lr_clip_max_factor: 2.0
+  reset_threshold: 0.05
+  counters_dtype: uint16
+hardware:
+  gpus: 1
+  gpu_type: A100-80GB
+  cpu_ram_gb: 64
+optuna:
+  n_trials: 50
+  direction: maximize
+  metric_name: dev_accuracy_auc
+  search_space:
+    base_learning_rate:
+      type: loguniform
+      low: 1.0e-4
+      high: 3.0e-4
+    lora_rank:
+      type: categorical
+      choices: [8, 16, 32]
+    batch_size:
+      type: categorical
+      choices: [32, 128]
+    basicalr.R_star:
+      type: uniform
+      low: 0.25
+      high: 0.35
+    basicalr.update_interval:
+      type: categorical
+      choices: [16, 32, 64]
