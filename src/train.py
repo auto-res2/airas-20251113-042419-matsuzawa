@@ -317,7 +317,9 @@ def _run_optuna(cfg):
 
 @hydra.main(config_path="../config", config_name="config")
 def main(cfg):
-    run_yaml = Path(get_original_cwd()) / "config" / "runs" / f"{cfg.run}.yaml"
+    # Compute the config path relative to this script file
+    script_dir = Path(__file__).parent.resolve()
+    run_yaml = script_dir.parent / "config" / "runs" / f"{cfg.run}.yaml"
     if not run_yaml.exists():
         raise FileNotFoundError(str(run_yaml))
     cfg = OmegaConf.merge(cfg, OmegaConf.load(run_yaml))

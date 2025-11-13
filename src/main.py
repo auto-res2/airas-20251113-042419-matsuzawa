@@ -7,7 +7,9 @@ from hydra.utils import to_absolute_path, get_original_cwd
 
 @hydra.main(config_path="../config", config_name="config")
 def main(cfg):
-    run_cfg = Path(get_original_cwd()) / "config" / "runs" / f"{cfg.run}.yaml"
+    # Compute the config path relative to this script file
+    script_dir = Path(__file__).parent.resolve()
+    run_cfg = script_dir.parent / "config" / "runs" / f"{cfg.run}.yaml"
     if not run_cfg.exists():
         raise FileNotFoundError(str(run_cfg))
 

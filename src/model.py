@@ -12,6 +12,9 @@ CACHE_DIR = ".cache/"
 
 def build_model(cfg):
     model_name = cfg.model.get("init_checkpoint", cfg.model.name)
+    # Strip hf:// prefix if present
+    if model_name.startswith("hf://"):
+        model_name = model_name[5:]
     tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=CACHE_DIR, use_fast=True)
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token_id = tokenizer.eos_token_id
