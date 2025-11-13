@@ -322,7 +322,9 @@ def main(cfg):
     run_yaml = script_dir.parent / "config" / "runs" / f"{cfg.run}.yaml"
     if not run_yaml.exists():
         raise FileNotFoundError(str(run_yaml))
+    OmegaConf.set_struct(cfg, False)
     cfg = OmegaConf.merge(cfg, OmegaConf.load(run_yaml))
+    OmegaConf.set_struct(cfg, True)
 
     # Switches for trial / full modes
     if cfg.mode == "trial":
