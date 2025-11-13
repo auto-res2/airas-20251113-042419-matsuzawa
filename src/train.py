@@ -199,7 +199,7 @@ def _single_run(cfg) -> Dict[str, float]:
     scheduler = get_cosine_schedule_with_warmup(optimizer, cfg.training.warmup_steps, total_steps)
 
     use_fp16 = cfg.training.mixed_precision == "fp16"
-    scaler = torch.cuda.amp.GradScaler(enabled=use_fp16)
+    scaler = torch.amp.GradScaler('cuda', enabled=use_fp16) if torch.cuda.is_available() else torch.amp.GradScaler('cpu', enabled=False)
 
     wandb_run = _init_wandb(cfg)
 

@@ -11,7 +11,12 @@ CACHE_DIR = ".cache/"
 class GSM8KCollator(DataCollatorForLanguageModeling):
     """Causal-LM collator that also keeps the raw answer string for accuracy eval."""
     def __init__(self, tokenizer: PreTrainedTokenizerBase):
-        super().__init__(tokenizer=tokenizer, mlm=False, return_tensors="pt")
+        # Ensure tokenizer has a padding token set for proper batch padding
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        if tokenizer.pad_token_id is None:
+            tokenizer.pad_token_id = tokenizer.eos_token_id
+        super().__init__(tokenizer=tokenizer, mlm=False, return_tensors="pt", pad_to_multiple_of=8)
 
     def __call__(self, examples):
         answers = [ex.pop("answer") for ex in examples]
@@ -23,7 +28,8 @@ class GSM8KCollator(DataCollatorForLanguageModeling):
 def _tokenise(example, tokenizer: PreTrainedTokenizerBase, cfg):
     prompt = f"Question: {example['question']}\nAnswer: "
     full_text = prompt + example["answer"]
-    enc = tokenizer(full_text, truncation=True, max_length=cfg.dataset.max_length)
+    # Do not pad here - let the collator handle padding during batching
+    enc = tokenizer(full_text, truncation=True, max_length=cfg.dataset.max_length, padding=False)
     enc["labels"] = enc["input_ids"].copy()
     enc["answer"] = example["answer"]
     return enc
