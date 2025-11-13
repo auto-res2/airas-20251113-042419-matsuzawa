@@ -789,7 +789,49 @@
     "iterations": [
       {
         "iteration_id": 1,
-        "method": "Bayesian Sign-Consistency Adaptive Learning-Rate (BaSiCALR)\n1.  Per-adapter state (2 × uint16):\n    • c⁺  – number of steps since last reset with    sign(g) = sign(EMA(g))\n    • c⁻  – number of steps with opposite sign.\n2.  Online Beta-posterior:  p̂ₜ = (α₀ + c⁺)/(α₀+β₀+c⁺+c⁻) with (α₀,β₀)=(1,1).\n3.  Reliability score:   Rₜ = 2·|p̂ₜ−0.5|  ∈[0,1].  R→1 means “sign is almost always the same”, R→0 means “coin-flip”.\n4.  LR scaling law (bidirectional):   ρₜ = exp( κ · (Rₜ−R★) ), with κ=ln2 and R★=0.3.\n   • if Rₜ>R★ ⇒ ρₜ>1 ⇒ LR grows up to ×2.\n   • if Rₜ<R★ ⇒ ρₜ<1 ⇒ LR shrinks down to ×½.\n5.  Gated update every Δ=32 optimiser steps: η_i ← clip( η_i·ρₜ , η_min , η_max ).  No extra forward/backward passes.\n6.  Reset counters whenever |ρₜ−1|<0.05 to avoid bias accumulation.\nPyTorch patch (<50 lines):\n```\nfor p in model.parameters():\n    if getattr(p,'is_lora',False):\n        p.c_pos = torch.zeros((),dtype=torch.int16)\n        p.c_neg = torch.zeros((),dtype=torch.int16)\n        p.lr = base_lr\n\nfor step,(loss) in enumerate(trainer):\n    loss.backward(); optimizer.step(); optimizer.zero_grad()\n    for p in lora_params:\n        same = torch.sign(p.grad).mean()*torch.sign( opt.state[p]['exp_avg'].mean() )>=0\n        if   same: p.c_pos+=1\n        else:       p.c_neg+=1\n        if step%32==0:\n            p_hat=(1+p.c_pos)/(2+p.c_pos+p.c_neg); R=2*abs(p_hat-0.5)\n            rho = math.exp(math.log(2)*(R-0.3))\n            p.lr = max(min(p.lr*rho,2*base_lr),0.5*base_lr)\n            p.c_pos.zero_(); p.c_neg.zero_()\n```"
+        "method": "Bayesian Sign-Consistency Adaptive Learning-Rate (BaSiCALR)\n1.  Per-adapter state (2 × uint16):\n    • c⁺  – number of steps since last reset with    sign(g) = sign(EMA(g))\n    • c⁻  – number of steps with opposite sign.\n2.  Online Beta-posterior:  p̂ₜ = (α₀ + c⁺)/(α₀+β₀+c⁺+c⁻) with (α₀,β₀)=(1,1).\n3.  Reliability score:   Rₜ = 2·|p̂ₜ−0.5|  ∈[0,1].  R→1 means “sign is almost always the same”, R→0 means “coin-flip”.\n4.  LR scaling law (bidirectional):   ρₜ = exp( κ · (Rₜ−R★) ), with κ=ln2 and R★=0.3.\n   • if Rₜ>R★ ⇒ ρₜ>1 ⇒ LR grows up to ×2.\n   • if Rₜ<R★ ⇒ ρₜ<1 ⇒ LR shrinks down to ×½.\n5.  Gated update every Δ=32 optimiser steps: η_i ← clip( η_i·ρₜ , η_min , η_max ).  No extra forward/backward passes.\n6.  Reset counters whenever |ρₜ−1|<0.05 to avoid bias accumulation.\nPyTorch patch (<50 lines):\n```\nfor p in model.parameters():\n    if getattr(p,'is_lora',False):\n        p.c_pos = torch.zeros((),dtype=torch.int16)\n        p.c_neg = torch.zeros((),dtype=torch.int16)\n        p.lr = base_lr\n\nfor step,(loss) in enumerate(trainer):\n    loss.backward(); optimizer.step(); optimizer.zero_grad()\n    for p in lora_params:\n        same = torch.sign(p.grad).mean()*torch.sign( opt.state[p]['exp_avg'].mean() )>=0\n        if   same: p.c_pos+=1\n        else:       p.c_neg+=1\n        if step%32==0:\n            p_hat=(1+p.c_pos)/(2+p.c_pos+p.c_neg); R=2*abs(p_hat-0.5)\n            rho = math.exp(math.log(2)*(R-0.3))\n            p.lr = max(min(p.lr*rho,2*base_lr),0.5*base_lr)\n            p.c_pos.zero_(); p.c_neg.zero_()\n```",
+        "experimental_design": {
+          "experiment_summary": "The experiment will fine-tune a 4-bit QLoRA version of Qwen3-0.6B on the GSM8K mathematics word-problem dataset.  The baseline optimiser will be AdamW.  Two variants are run in parallel over three random seeds:\n1. Proposed Bayesian Sign-Consistency Adaptive Learning-Rate (BaSiCALR) – a per-adapter, bidirectional, continual LR controller that stores two uint16 counters and rescales the individual adapter-LR every 32 optimisation steps according to a Beta-posterior reliability score.\n2. Comparative method HiNoALR – a one-directional LR shrinker that halves learning rates of unstable adapters once.\n\nBoth variants share the same training script, data loader, mixed-precision configuration and gradient-accumulation schedule.  Models are evaluated every 1000 steps on the GSM8K validation split.  After training, final checkpoints are tested on the GSM8K test split.  Wall-clock time is logged at every evaluation to compute accuracy-vs-time curves.  Per-adapter LR trajectories and weight-norms are dumped to disk for later analysis.  All runs fit comfortably within a single NVIDIA A100-80GB and <40 GB CPU RAM.\n\nWorkflow:\n• Data preprocessing → 4-bit QLoRA preparation → training loop with BaSiCALR/HiNoALR hooks → periodic validation and logging → final testing and metric aggregation.",
+          "evaluation_metrics": [
+            "Test exact-match accuracy",
+            "Median dev-accuracy AUC vs wall-clock",
+            "% of adapters with LR up-scaled",
+            "% of adapters with LR down-scaled",
+            "Coefficient of variation of final adapter weight norms",
+            "(1) Test exact-match accuracy.  (2) Median dev-accuracy AUC vs wall-clock.  (3) % of adapters whose LR was up-scaled vs down-scaled, and final per-adapter norm CV."
+          ],
+          "proposed_method": "Bayesian Sign-Consistency Adaptive Learning-Rate (BaSiCALR) aims to eliminate manual LR tuning for each LoRA adapter while allowing both increases and decreases in LR during training at virtually zero computational cost.\n\nState per adapter: two 16-bit integer counters c⁺ and c⁻ recording, respectively, how many consecutive optimisation steps showed sign agreement or disagreement between the current gradient and the running exponential-moving-average (EMA) of past gradients.\n\nStatistical model: after every optimiser step, the counts define a Beta(α₀+ c⁺, β₀+ c⁻) posterior for the probability that \"gradients keep their sign\", with (α₀,β₀)=(1,1).  The mean p̂ₜ is used to compute a reliability score Rₜ = 2·|p̂ₜ−0.5| ∈[0,1].  Rₜ≈1 denotes highly consistent gradients (under-learning), whereas Rₜ≈0 indicates sign flips (over-learning).\n\nLR scaling: every Δ=32 steps the adapter learning-rate η is multiplied by ρₜ = exp(ln2·(Rₜ−R★)) with target reliability R★=0.3 and clipped to [0.5·η₀, 2·η₀] where η₀ is the global base LR.  Hence, highly reliable adapters can double their LR, and noisy ones can have it halved.  After applying the update, counters are reset if |ρₜ−1|<0.05 to avoid drift.\n\nImplementation: ≈50 lines of PyTorch code added inside the training loop.  No extra forward/backward passes, <0.8 % run-time overhead, and two bytes of extra memory per adapter.",
+          "comparative_methods": [
+            "HiNoALR"
+          ],
+          "models_to_use": [
+            "Qwen3-0.6B"
+          ],
+          "datasets_to_use": [
+            "gsm8k"
+          ],
+          "hyperparameters_to_search": {
+            "base_learning_rate": "1e-4-3e-4",
+            "LoRA_rank": "8,16,32",
+            "batch_size": "32,64,128",
+            "BaSiCALR_R★": "0.25-0.35",
+            "BaSiCALR_update_interval_Δ": "16,32,64"
+          }
+        },
+        "experiment_runs": [
+          {
+            "run_id": "proposed-iter1-Qwen3-0.6B-gsm8k",
+            "method_name": "proposed",
+            "model_name": "Qwen3-0.6B",
+            "dataset_name": "gsm8k"
+          },
+          {
+            "run_id": "comparative-1-iter1-Qwen3-0.6B-gsm8k",
+            "method_name": "comparative-1",
+            "model_name": "Qwen3-0.6B",
+            "dataset_name": "gsm8k"
+          }
+        ]
       }
     ]
   }
