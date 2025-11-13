@@ -29,7 +29,9 @@ def main(cfg):
     else:
         raise ValueError("mode must be 'trial' or 'full'")
 
-    cmd = [sys.executable, "-u", "-m", "src.train"] + overrides
+    # Get the absolute path to train.py
+    train_script = Path(__file__).parent / "train.py"
+    cmd = [sys.executable, "-u", str(train_script)] + overrides
     print("[main] Launching training subprocess:\n  " + " ".join(cmd))
     subprocess.run(cmd, check=True)
 
